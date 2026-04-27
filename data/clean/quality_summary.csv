@@ -1,0 +1,5 @@
+dataset,filas,rechazadas,duplicados,nulos_criticos
+dim_cuentas,18,0,0,0
+fact_movimientos,1092,0,25,0
+fact_saldos_tercero,379,10,0,0
+dim_terceros,104,0,0,0
