@@ -22,6 +22,7 @@ BRAND = {
     "accent_soft": "#d8f0ee",
     "line": "#dce3e0",
 }
+CHART_HEIGHT = 340
 
 
 @st.cache_data
@@ -66,6 +67,37 @@ def period_label(df: pd.DataFrame) -> str:
     if pd.isna(start) or pd.isna(end):
         return "Sin periodo"
     return f"{start:%d/%m/%Y} - {end:%d/%m/%Y}"
+
+
+def compact_label(value: str | None, max_len: int = 42) -> str:
+    text = str(value or "").strip()
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 1].rstrip() + "…"
+
+
+def apply_chart_theme(fig: go.Figure, *, height: int = CHART_HEIGHT) -> go.Figure:
+    fig.update_layout(
+        template="plotly_white",
+        height=height,
+        margin=dict(l=12, r=12, t=28, b=12),
+        plot_bgcolor="#ffffff",
+        paper_bgcolor="#ffffff",
+        font=dict(family="Source Sans 3, sans-serif", color=BRAND["ink"], size=13),
+        hoverlabel=dict(bgcolor="#ffffff", font_size=12, font_family="Source Sans 3, sans-serif"),
+        autosize=True,
+    )
+    fig.update_xaxes(showgrid=True, gridcolor="#edf3f1", zeroline=False, automargin=True)
+    fig.update_yaxes(showgrid=True, gridcolor="#edf3f1", zeroline=False, automargin=True)
+    return fig
+
+
+def render_chart(target, fig: go.Figure) -> None:
+    target.plotly_chart(
+        fig,
+        use_container_width=True,
+        config={"responsive": True, "displaylogo": False},
+    )
 
 
 def calc_quality_score(quality_df: pd.DataFrame, rejected_df: pd.DataFrame) -> float:
@@ -145,9 +177,13 @@ html, body, [class*="css"] {{ font-family: 'Source Sans 3', sans-serif; backgrou
 h1, h2, h3 {{ font-family: 'Manrope', sans-serif; letter-spacing: -0.02em; color: {BRAND['ink']}; }}
 .hero {{ background: linear-gradient(130deg, #f8fefd 0%, #eef5f3 58%, #e6f1ee 100%); border: 1px solid {BRAND['line']}; border-radius: 18px; padding: 16px 18px; margin-bottom: 14px; }}
 .meta {{ color: {BRAND['muted']}; font-size: 0.94rem; }}
+[data-testid="stVerticalBlock"] > [style*="flex-direction: column"] > [data-testid="stVerticalBlockBorderWrapper"] {{ border-radius: 14px; }}
 [data-testid="stMetric"] {{ background: {BRAND['surface']}; border: 1px solid {BRAND['line']}; border-radius: 14px; padding: 10px; }}
 [data-testid="stMetricLabel"] p {{ color: {BRAND['muted']}; }}
 [data-testid="stSidebar"] {{ background: #fbfdfd; border-right: 1px solid {BRAND['line']}; }}
+[data-testid="stSidebar"] [data-baseweb="select"] > div,
+[data-testid="stSidebar"] [data-baseweb="input"] > div {{ border-color: {BRAND['line']}; border-radius: 10px; }}
+[data-testid="stSidebar"] [role="radiogroup"] > label {{ background: #f4f8f7; border: 1px solid {BRAND['line']}; border-radius: 10px; padding: 8px 10px; margin-bottom: 6px; }}
 .stTabs [data-baseweb="tab-list"] {{ gap: 8px; }}
 .stTabs [data-baseweb="tab"] {{ background: #ecf4f2; border-radius: 10px; padding: 6px 12px; }}
 .stTabs [aria-selected="true"] {{ background: #d9ece8; }}
@@ -155,8 +191,13 @@ h1, h2, h3 {{ font-family: 'Manrope', sans-serif; letter-spacing: -0.02em; color
 .kpi-card {{ background: {BRAND['surface']}; border: 1px solid {BRAND['line']}; border-radius: 12px; padding: 10px 12px; }}
 .kpi-title {{ color: {BRAND['muted']}; font-size: 0.82rem; margin-bottom: 3px; }}
 .kpi-value {{ color: {BRAND['ink']}; font-size: 1.15rem; font-weight: 700; line-height: 1.2; }}
+.section-card {{ background: {BRAND['surface']}; border: 1px solid {BRAND['line']}; border-radius: 14px; padding: 10px 12px; margin-bottom: 10px; }}
 @media (max-width: 1024px) {{
   .kpi-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+}}
+@media (max-width: 1200px) {{
+  [data-testid="stHorizontalBlock"] {{ flex-wrap: wrap; gap: 0.8rem; }}
+  [data-testid="column"] {{ min-width: 100% !important; flex: 1 1 100% !important; }}
 }}
 @media (max-width: 768px) {{
   .hero {{ padding: 12px; border-radius: 14px; }}
@@ -165,6 +206,9 @@ h1, h2, h3 {{ font-family: 'Manrope', sans-serif; letter-spacing: -0.02em; color
   .stTabs [data-baseweb="tab-list"] {{ flex-wrap: wrap; }}
   .stTabs [data-baseweb="tab"] {{ flex: 1 1 48%; justify-content: center; }}
   [data-testid="stDataFrame"] {{ max-height: 320px; overflow: auto; }}
+  .js-plotly-plot,
+  .js-plotly-plot .plot-container,
+  .js-plotly-plot .svg-container {{ min-height: 280px !important; height: 280px !important; }}
 }}
 </style>
 """,
@@ -330,16 +374,24 @@ with tab1:
                     .sort_values("debito", ascending=False)
                     .head(12)
                 )
-                top_cuentas["label"] = top_cuentas["cuenta"].astype(str) + " - " + top_cuentas["nombre_cuenta"].fillna("")
-                fig_cuentas = px.bar(top_cuentas, x="label", y="debito", color="debito", color_continuous_scale="Teal")
-                fig_cuentas.update_layout(
-                    margin=dict(l=8, r=8, t=10, b=8),
-                    coloraxis_showscale=False,
-                    xaxis_title="Cuenta",
-                    yaxis_title="Débito",
-                    xaxis={"categoryorder": "total descending"},
+                top_cuentas["label_full"] = top_cuentas["cuenta"].astype(str) + " - " + top_cuentas["nombre_cuenta"].fillna("")
+                top_cuentas["label"] = top_cuentas["label_full"].apply(compact_label)
+                top_cuentas = top_cuentas.sort_values("debito", ascending=True)
+                fig_cuentas = px.bar(
+                    top_cuentas,
+                    x="debito",
+                    y="label",
+                    orientation="h",
+                    color="debito",
                 )
-                st.plotly_chart(fig_cuentas, use_container_width=True)
+                fig_cuentas.update_traces(
+                    customdata=top_cuentas[["label_full"]].to_numpy(),
+                    hovertemplate="<b>%{customdata[0]}</b><br>Débito: %{x:,.2f}<extra></extra>",
+                )
+                fig_cuentas.update_layout(coloraxis_showscale=False, xaxis_title="Débito", yaxis_title="Cuenta")
+                fig_cuentas.update_xaxes(tickprefix="$ ")
+                apply_chart_theme(fig_cuentas)
+                render_chart(st, fig_cuentas)
 
         with c_right:
             st.subheader("Top terceros por saldo")
@@ -353,16 +405,24 @@ with tab1:
                     .sort_values("saldo_actual", ascending=False)
                     .head(12)
                 )
-                top_terceros["label"] = top_terceros["tercero_id"].astype(str) + " - " + top_terceros["tercero_nombre"].fillna("")
-                fig_terceros = px.bar(top_terceros, x="label", y="saldo_actual", color="saldo_actual", color_continuous_scale="Tealgrn")
-                fig_terceros.update_layout(
-                    margin=dict(l=8, r=8, t=10, b=8),
-                    coloraxis_showscale=False,
-                    xaxis_title="Tercero",
-                    yaxis_title="Saldo actual",
-                    xaxis={"categoryorder": "total descending"},
+                top_terceros["label_full"] = top_terceros["tercero_id"].astype(str) + " - " + top_terceros["tercero_nombre"].fillna("")
+                top_terceros["label"] = top_terceros["label_full"].apply(compact_label)
+                top_terceros = top_terceros.sort_values("saldo_actual", ascending=True)
+                fig_terceros = px.bar(
+                    top_terceros,
+                    x="saldo_actual",
+                    y="label",
+                    orientation="h",
+                    color="saldo_actual",
                 )
-                st.plotly_chart(fig_terceros, use_container_width=True)
+                fig_terceros.update_traces(
+                    customdata=top_terceros[["label_full"]].to_numpy(),
+                    hovertemplate="<b>%{customdata[0]}</b><br>Saldo actual: %{x:,.2f}<extra></extra>",
+                )
+                fig_terceros.update_layout(coloraxis_showscale=False, xaxis_title="Saldo actual", yaxis_title="Tercero")
+                fig_terceros.update_xaxes(tickprefix="$ ")
+                apply_chart_theme(fig_terceros)
+                render_chart(st, fig_terceros)
 
 with tab2:
     render_pdf_button(
@@ -430,8 +490,16 @@ with tab2:
                 title="CH-MOV-01 · Distribución nombre_cuenta",
                 hole=0.35,
             )
-            pie_nombre.update_layout(margin=dict(l=8, r=8, t=38, b=8))
-            t1.plotly_chart(pie_nombre, use_container_width=True)
+            pie_nombre.update_traces(
+                textinfo="none",
+                hovertemplate="%{label}<br>Registros: %{value}<br>%{percent}<extra></extra>",
+            )
+            pie_nombre.update_layout(
+                showlegend=True,
+                legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, title_text="Categoria"),
+            )
+            apply_chart_theme(pie_nombre)
+            render_chart(t1, pie_nombre)
 
         top_tercero = mov_step["tercero_nombre"].fillna("Sin nombre").astype(str).str.strip().value_counts().head(8).reset_index()
         top_tercero.columns = ["tercero_nombre", "conteo"]
@@ -445,8 +513,16 @@ with tab2:
                 title="CH-MOV-02 · Distribución tercero_nombre",
                 hole=0.35,
             )
-            pie_tercero.update_layout(margin=dict(l=8, r=8, t=38, b=8))
-            t2.plotly_chart(pie_tercero, use_container_width=True)
+            pie_tercero.update_traces(
+                textinfo="none",
+                hovertemplate="%{label}<br>Registros: %{value}<br>%{percent}<extra></extra>",
+            )
+            pie_tercero.update_layout(
+                showlegend=True,
+                legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, title_text="Categoria"),
+            )
+            apply_chart_theme(pie_tercero)
+            render_chart(t2, pie_tercero)
 
         top_tipo_doc = mov_step["tipo_doc"].fillna("Sin tipo").astype(str).str.strip().value_counts().head(8).reset_index()
         top_tipo_doc.columns = ["tipo_doc", "conteo"]
@@ -460,8 +536,16 @@ with tab2:
                 title="CH-MOV-03 · Distribución tipo_doc",
                 hole=0.35,
             )
-            pie_tipo_doc.update_layout(margin=dict(l=8, r=8, t=38, b=8))
-            t3.plotly_chart(pie_tipo_doc, use_container_width=True)
+            pie_tipo_doc.update_traces(
+                textinfo="none",
+                hovertemplate="%{label}<br>Registros: %{value}<br>%{percent}<extra></extra>",
+            )
+            pie_tipo_doc.update_layout(
+                showlegend=True,
+                legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, title_text="Categoria"),
+            )
+            apply_chart_theme(pie_tipo_doc)
+            render_chart(t3, pie_tipo_doc)
 
 with tab3:
     render_pdf_button(
@@ -506,8 +590,16 @@ with tab3:
                 title="CH-SAL-01 · Distribución nombre_cuenta",
                 hole=0.35,
             )
-            pie_cuenta_sal.update_layout(margin=dict(l=8, r=8, t=38, b=8))
-            s1.plotly_chart(pie_cuenta_sal, use_container_width=True)
+            pie_cuenta_sal.update_traces(
+                textinfo="none",
+                hovertemplate="%{label}<br>Registros: %{value}<br>%{percent}<extra></extra>",
+            )
+            pie_cuenta_sal.update_layout(
+                showlegend=True,
+                legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, title_text="Categoria"),
+            )
+            apply_chart_theme(pie_cuenta_sal)
+            render_chart(s1, pie_cuenta_sal)
 
         top_tercero_nom_sal = sal_f["tercero_nombre"].fillna("Sin nombre").astype(str).value_counts().head(8).reset_index()
         top_tercero_nom_sal.columns = ["tercero_nombre", "conteo"]
@@ -521,8 +613,16 @@ with tab3:
                 title="CH-SAL-03 · Distribución tercero_nombre",
                 hole=0.35,
             )
-            pie_tercero_nom_sal.update_layout(margin=dict(l=8, r=8, t=38, b=8))
-            s3.plotly_chart(pie_tercero_nom_sal, use_container_width=True)
+            pie_tercero_nom_sal.update_traces(
+                textinfo="none",
+                hovertemplate="%{label}<br>Registros: %{value}<br>%{percent}<extra></extra>",
+            )
+            pie_tercero_nom_sal.update_layout(
+                showlegend=True,
+                legend=dict(orientation="v", yanchor="top", y=1, xanchor="left", x=1.02, title_text="Categoria"),
+            )
+            apply_chart_theme(pie_tercero_nom_sal)
+            render_chart(s3, pie_tercero_nom_sal)
 
 with tab4:
     render_pdf_button(
@@ -548,11 +648,12 @@ with tab4:
                         {"range": [70, 85], "color": "#f7eccf"},
                         {"range": [85, 100], "color": "#d8f0ee"},
                     ],
+                    "threshold": {"line": {"color": "#0f1720", "width": 3}, "thickness": 0.75, "value": 85},
                 },
             )
         )
-        fig.update_layout(margin=dict(l=8, r=8, t=20, b=8), height=250)
-        st.plotly_chart(fig, use_container_width=True)
+        apply_chart_theme(fig)
+        render_chart(st, fig)
 
     with q_col:
         st.dataframe(quality, use_container_width=True, height=250)
@@ -569,9 +670,21 @@ with tab4:
         st.success("No hay filas rechazadas en el lote actual.")
     else:
         rej = rejected.groupby("motivo", as_index=False).size().sort_values("size", ascending=False)
-        fig = px.bar(rej, x="motivo", y="size", color="size", color_continuous_scale="Teal")
-        fig.update_layout(margin=dict(l=8, r=8, t=10, b=8), xaxis_title="Motivo", yaxis_title="Filas")
-        st.plotly_chart(fig, use_container_width=True)
+        rej["motivo_short"] = rej["motivo"].apply(compact_label)
+        fig = px.bar(
+            rej.sort_values("size", ascending=True),
+            x="size",
+            y="motivo_short",
+            orientation="h",
+            color="size",
+        )
+        fig.update_traces(
+            customdata=rej.sort_values("size", ascending=True)[["motivo"]].to_numpy(),
+            hovertemplate="<b>%{customdata[0]}</b><br>Filas: %{x}<extra></extra>",
+        )
+        fig.update_layout(coloraxis_showscale=False, xaxis_title="Filas", yaxis_title="Motivo")
+        apply_chart_theme(fig)
+        render_chart(st, fig)
         st.dataframe(rejected, use_container_width=True, height=300)
 
 with tab5:
