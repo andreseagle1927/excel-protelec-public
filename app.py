@@ -225,15 +225,16 @@ last_refresh = max((DATA / "fact_movimientos.parquet").stat().st_mtime, (DATA / 
 last_refresh_ts = pd.to_datetime(last_refresh, unit="s")
 
 st.markdown("<div class='hero'>", unsafe_allow_html=True)
-st.title("Dirección de Materiales · Protelec")
+st.title("📊 Dirección de Materiales · Protelec")
+st.markdown("<div class='meta'>🏦 Plataforma de datos de contabilidad para analítica financiera y control ejecutivo.</div>", unsafe_allow_html=True)
 quality_score = calc_quality_score(quality, rejected)
 st.markdown(
-    f"<div class='meta'>Periodo disponible: <b>{period_label(mov)}</b> · Última actualización: <b>{last_refresh_ts:%d/%m/%Y %H:%M}</b> · Calidad de datos: <b>{quality_score:.1f}/100</b></div>",
+    f"<div class='meta'>🗓️ Periodo disponible: <b>{period_label(mov)}</b> · 🔄 Última actualización: <b>{last_refresh_ts:%d/%m/%Y %H:%M}</b> · ✅ Calidad de datos: <b>{quality_score:.1f}/100</b></div>",
     unsafe_allow_html=True,
 )
 st.markdown("</div>", unsafe_allow_html=True)
 
-st.sidebar.header("Control ejecutivo")
+st.sidebar.header("🧭 Control ejecutivo")
 anios = sorted(set(mov["anio"].dropna().astype(int).tolist() + sal["anio"].dropna().astype(int).tolist()))
 default_years = [max(anios)] if anios else []
 anio_sel = st.sidebar.multiselect("Año fiscal", options=anios, default=default_years)
