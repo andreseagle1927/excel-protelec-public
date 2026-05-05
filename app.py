@@ -167,7 +167,9 @@ def render_pdf_button(pdf_data: bytes, file_name: str, key_suffix: str) -> None:
     )
 
 
-st.set_page_config(page_title="Dirección Financiera Materiales", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Contabilidad (movimientos, saldos)", page_icon="📊", layout="wide")
+st.link_button("Home", "http://135.181.182.60:8500/", use_container_width=False)
+st.image("logoProtelec.png", width=180)
 
 st.markdown(
     f"""
@@ -225,7 +227,7 @@ last_refresh = max((DATA / "fact_movimientos.parquet").stat().st_mtime, (DATA / 
 last_refresh_ts = pd.to_datetime(last_refresh, unit="s")
 
 st.markdown("<div class='hero'>", unsafe_allow_html=True)
-st.title("📊 Dirección de Materiales · Protelec")
+st.title("📊 Contabilidad (movimientos, saldos)")
 st.markdown("<div class='meta'>🏦 Plataforma de datos de contabilidad para analítica financiera y control ejecutivo.</div>", unsafe_allow_html=True)
 quality_score = calc_quality_score(quality, rejected)
 st.markdown(
