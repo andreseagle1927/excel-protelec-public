@@ -168,7 +168,7 @@ def render_pdf_button(pdf_data: bytes, file_name: str, key_suffix: str) -> None:
 
 
 st.set_page_config(page_title="Contabilidad (movimientos, saldos)", page_icon="📊", layout="wide")
-st.link_button("Home", "http://135.181.182.60:8500/", use_container_width=False)
+st.link_button("Home", "https://streamlit.protelec.co/", use_container_width=False)
 st.image("logoProtelec.png", width=180)
 
 st.markdown(
